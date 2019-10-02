@@ -23,7 +23,7 @@ struct in_sdl_state {
 	const in_drv_t *drv;
 	SDL_Joystick *joy;
 	int joy_id;
-	int axis_keydown[2];
+	int axis_keydown[8];
 	keybits_t keystate[SDLK_LAST / KEYBITS_WORD_BITS + 1];
 };
 
@@ -163,6 +163,46 @@ static const char * const in_sdl_keys[SDLK_LAST] = {
 	[SDLK_COMPOSE] = "compose",
 };
 
+#define JOYBUTTON(x) (1<<(x))
+
+unsigned long uljoybuttontables[] = {
+	JOYBUTTON(0), // 0xA0
+	JOYBUTTON(1),
+	JOYBUTTON(2),
+	JOYBUTTON(3),
+	JOYBUTTON(4),
+	JOYBUTTON(5),
+	JOYBUTTON(6),
+	JOYBUTTON(7),
+	JOYBUTTON(7) | JOYBUTTON(6), // start + select (0xA8)
+	JOYBUTTON(7) | JOYBUTTON(5),
+	JOYBUTTON(7) | JOYBUTTON(4),
+	JOYBUTTON(7) | JOYBUTTON(3),
+	JOYBUTTON(7) | JOYBUTTON(2),
+	JOYBUTTON(7) | JOYBUTTON(1),
+	JOYBUTTON(7) | JOYBUTTON(0),
+	JOYBUTTON(6) | JOYBUTTON(5), // select + R (0xAF)
+	JOYBUTTON(6) | JOYBUTTON(4), // select + L (0xB0)
+	JOYBUTTON(6) | JOYBUTTON(3), // select + Y (0xB1)
+	JOYBUTTON(6) | JOYBUTTON(2), // select + X (0xB2) 
+	JOYBUTTON(6) | JOYBUTTON(1), // select + B
+	JOYBUTTON(6) | JOYBUTTON(0), // select + A
+	JOYBUTTON(5) | JOYBUTTON(4),
+	JOYBUTTON(5) | JOYBUTTON(3),
+	JOYBUTTON(5) | JOYBUTTON(2),
+	JOYBUTTON(5) | JOYBUTTON(1),
+	JOYBUTTON(5) | JOYBUTTON(0),
+	JOYBUTTON(4) | JOYBUTTON(3),
+	JOYBUTTON(4) | JOYBUTTON(2),
+	JOYBUTTON(4) | JOYBUTTON(1),
+	JOYBUTTON(4) | JOYBUTTON(0),
+	JOYBUTTON(3) | JOYBUTTON(2),
+	JOYBUTTON(3) | JOYBUTTON(1),
+	JOYBUTTON(3) | JOYBUTTON(0),
+	JOYBUTTON(2) | JOYBUTTON(1),
+	JOYBUTTON(2) | JOYBUTTON(0),
+    JOYBUTTON(1) | JOYBUTTON(0)};
+	
 static void in_sdl_probe(const in_drv_t *drv)
 {
 	const struct in_pdata *pdata = drv->pdata;
@@ -267,7 +307,9 @@ static int handle_joy_event(struct in_sdl_state *state, SDL_Event *event,
 	int *kc_out, int *down_out)
 {
 	int kc = -1, down = 0, ret = 0;
-
+	int i=0;
+	static unsigned long uljoybuttonstates = 0;
+	
 	/* TODO: remaining axis */
 	switch (event->type) {
 	case SDL_JOYAXISMOTION:
@@ -299,13 +341,85 @@ static int handle_joy_event(struct in_sdl_state *state, SDL_Event *event,
 			ret = 1;
 		}
 		break;
-
+	case SDL_JOYHATMOTION:
+		if (event->jhat.which != state->joy_id)
+		return -2;
+	
+		if (event->jhat.value == SDL_HAT_CENTERED) {
+			kc = state->axis_keydown[event->jhat.hat];
+			state->axis_keydown[event->jhat.hat] = 0;
+			ret = 1;
+		}
+		else 		
+		if (event->jhat.value & SDL_HAT_UP || event->jhat.value & SDL_HAT_LEFT) {
+			kc = state->axis_keydown[event->jhat.hat];
+			if (kc)
+				update_keystate(state->keystate, kc, 0);
+			kc = (event->jhat.value & SDL_HAT_UP) ? SDLK_UP : SDLK_LEFT;
+			state->axis_keydown[event->jhat.hat] = kc;
+			down = 1;
+			ret = 1;
+		}
+		else if (event->jhat.value & SDL_HAT_DOWN || event->jhat.value & SDL_HAT_RIGHT) {
+			kc = state->axis_keydown[event->jhat.hat];
+			if (kc)
+				update_keystate(state->keystate, kc, 0);
+			kc = (event->jhat.value & SDL_HAT_DOWN) ? SDLK_DOWN : SDLK_RIGHT;
+			state->axis_keydown[event->jhat.hat] = kc;
+			down = 1;
+			ret = 1;
+		}
+		break;	
 	case SDL_JOYBUTTONDOWN:
+		if (event->jbutton.which != state->joy_id)
+			return -2;
+		
+		uljoybuttonstates |= JOYBUTTON(event->jbutton.button);
+		for(i=0; i<sizeof(uljoybuttontables)/sizeof(unsigned long); i++)
+		{
+			if (uljoybuttonstates == uljoybuttontables[i])
+			{
+				kc = i + SDLK_WORLD_0;
+				break;
+			}
+		}
+		if (i>=sizeof(uljoybuttontables)/sizeof(unsigned long))
+		{
+			kc = (int)event->jbutton.button + SDLK_WORLD_0;
+		}
+
+		down = 1;
+		ret = 1;
+		
+		//printf("SDL_JOYBUTTONDOWN: uljoybuttonstates = 0x%lx, kc = 0x%x, jbutton.state = %d\r\n", uljoybuttonstates, kc, event->jbutton.state);
+		break;
 	case SDL_JOYBUTTONUP:
 		if (event->jbutton.which != state->joy_id)
 			return -2;
-		kc = (int)event->jbutton.button + SDLK_WORLD_0;
-		down = event->jbutton.state == SDL_PRESSED;
+		
+		if (uljoybuttonstates)
+		{
+			for(i=0; i<sizeof(uljoybuttontables)/sizeof(unsigned long); i++)
+			{
+				if (uljoybuttonstates == uljoybuttontables[i])
+				{
+					kc = i + SDLK_WORLD_0;
+					break;
+				}
+			}
+			if (i>=sizeof(uljoybuttontables)/sizeof(unsigned long))
+			{
+				kc = (int)event->jbutton.button + SDLK_WORLD_0;
+			}	
+			
+			uljoybuttonstates &= ~JOYBUTTON(event->jbutton.button);
+		}
+		else
+		{
+			kc = (int)event->jbutton.button + SDLK_WORLD_0;
+		}
+		
+		//printf("SDL_JOYBUTTONUP: uljoybuttonstates = 0x%lx, kc = 0x%x, jbutton.state = %d\r\n", uljoybuttonstates, kc, event->jbutton.state);
 		ret = 1;
 		break;
 	default:
@@ -313,7 +427,11 @@ static int handle_joy_event(struct in_sdl_state *state, SDL_Event *event,
 	}
 
 	if (ret)
-		update_keystate(state->keystate, kc, down);
+	{
+		if (kc)
+			update_keystate(state->keystate, kc, down);
+	}
+	
 	if (kc_out != NULL)
 		*kc_out = kc;
 	if (down_out != NULL)
