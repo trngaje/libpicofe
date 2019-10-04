@@ -303,6 +303,8 @@ static int handle_event(struct in_sdl_state *state, SDL_Event *event,
 	return 1;
 }
 
+int intjoy_axes[8][2]={0,};
+
 static int handle_joy_event(struct in_sdl_state *state, SDL_Event *event,
 	int *kc_out, int *down_out)
 {
@@ -345,30 +347,75 @@ static int handle_joy_event(struct in_sdl_state *state, SDL_Event *event,
 		if (event->jhat.which != state->joy_id)
 		return -2;
 	
-		if (event->jhat.value == SDL_HAT_CENTERED) {
-			kc = state->axis_keydown[event->jhat.hat];
-			state->axis_keydown[event->jhat.hat] = 0;
-			ret = 1;
+	
+	if ( event->jhat.hat >= (sizeof(intjoy_axes) / (2 * sizeof(int))) )
+		return -2;
+	
+	if (event->jhat.value == SDL_HAT_CENTERED) {
+		kc=0;
+		if (intjoy_axes[event->jhat.hat][0])
+		{
+			kc = intjoy_axes[event->jhat.hat][0];
+			update_keystate(state->keystate, kc, 0);
+			intjoy_axes[event->jhat.hat][0]=0;
+		}	
+		if (intjoy_axes[event->jhat.hat][1])
+		{
+			kc = intjoy_axes[event->jhat.hat][1];
+			update_keystate(state->keystate, kc, 0);
+			intjoy_axes[event->jhat.hat][1]=0;
 		}
-		else 		
-		if (event->jhat.value & SDL_HAT_UP || event->jhat.value & SDL_HAT_LEFT) {
-			kc = state->axis_keydown[event->jhat.hat];
-			if (kc)
-				update_keystate(state->keystate, kc, 0);
-			kc = (event->jhat.value & SDL_HAT_UP) ? SDLK_UP : SDLK_LEFT;
+		
+		state->axis_keydown[event->jhat.hat] = 0;
+		ret = 1;
+	}
+	else 
+	{
+		if (event->jhat.value & SDL_HAT_LEFT || event->jhat.value & SDL_HAT_RIGHT)
+		{
+			if (intjoy_axes[event->jhat.hat][0])
+			{
+				update_keystate(state->keystate, intjoy_axes[event->jhat.hat][0], 0);
+			}
+			
+			kc = (event->jhat.value & SDL_HAT_LEFT) ? SDLK_LEFT : SDLK_RIGHT;
+			intjoy_axes[event->jhat.hat][0] = kc;
 			state->axis_keydown[event->jhat.hat] = kc;
+			
 			down = 1;
-			ret = 1;
+			ret = 1;	
 		}
-		else if (event->jhat.value & SDL_HAT_DOWN || event->jhat.value & SDL_HAT_RIGHT) {
-			kc = state->axis_keydown[event->jhat.hat];
-			if (kc)
-				update_keystate(state->keystate, kc, 0);
-			kc = (event->jhat.value & SDL_HAT_DOWN) ? SDLK_DOWN : SDLK_RIGHT;
+		else
+		{
+			if (intjoy_axes[event->jhat.hat][0])
+			{
+				update_keystate(state->keystate, intjoy_axes[event->jhat.hat][0], 0);
+			}	
+		}
+		
+		if (event->jhat.value & SDL_HAT_UP || event->jhat.value & SDL_HAT_DOWN)
+		{
+			if (intjoy_axes[event->jhat.hat][1])
+			{
+				update_keystate(state->keystate, intjoy_axes[event->jhat.hat][1], 0);
+			}
+			
+			kc = (event->jhat.value & SDL_HAT_UP) ? SDLK_UP : SDLK_DOWN;
+			intjoy_axes[event->jhat.hat][1] = kc;
 			state->axis_keydown[event->jhat.hat] = kc;
+			
 			down = 1;
-			ret = 1;
+			ret = 1;			
 		}
+		else
+		{
+			if (intjoy_axes[event->jhat.hat][1])
+			{
+				update_keystate(state->keystate, intjoy_axes[event->jhat.hat][1], 0);
+			}	
+		}
+	}
+	
 		break;	
 	case SDL_JOYBUTTONDOWN:
 		if (event->jbutton.which != state->joy_id)
