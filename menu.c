@@ -302,14 +302,24 @@ void menu_init_base(void)
 
 	// load custom font and selector (stored as 1st symbol in font table)
 	pos = plat_get_skin_dir(buff, sizeof(buff));
-	strcpy(buff + pos, "font.png");
-	readpng(menu_font_data, buff, READPNG_FONT,
-		MENU_X2 ? 256 : 128, MENU_X2 ? 320 : 160);
+
+	if (MENU_X2) {
+		strcpy(buff + pos, "font_256x320.png");
+		
+		//readpng(menu_font_data, buff, READPNG_FONT, 256, 320);		
+	}
+	else {
+		strcpy(buff + pos, "font.png");
+		
+		readpng(menu_font_data, buff, READPNG_FONT,
+			MENU_X2 ? 256 : 128, MENU_X2 ? 320 : 160);
+
+	}
 	// default selector symbol is '>'
 	memcpy(menu_font_data, menu_font_data + ((int)'>') * me_mfont_w * me_mfont_h / 2,
 		me_mfont_w * me_mfont_h / 2);
 	strcpy(buff + pos, "selector.png");
-	readpng(menu_font_data, buff, READPNG_SELECTOR, me_mfont_w, me_mfont_h);
+	//readpng(menu_font_data, buff, READPNG_SELECTOR, me_mfont_w, me_mfont_h);
 
 	// load custom colors
 	strcpy(buff + pos, "skin.txt");
