@@ -144,8 +144,8 @@ int plat_sdl_change_video_mode(int w, int h, int force)
 							  SDL_WINDOWPOS_UNDEFINED,
 							  win_w, win_h,
 							  SDL_WINDOW_FULLSCREEN | SDL_WINDOW_OPENGL);
-*/							  
 	SDL_ShowCursor(SDL_DISABLE);
+*/							  
 	
 	if (surface!=NULL)
 		go2_surface_destroy(surface);
@@ -156,11 +156,13 @@ int plat_sdl_change_video_mode(int w, int h, int force)
 								  
 #else
     plat_sdl_screen = SDL_SetVideoMode(win_w, win_h, 0, flags);
-#endif
+
     if (plat_sdl_screen == NULL) {
       fprintf(stderr, "SDL_SetVideoMode failed: %s\n", SDL_GetError());
       plat_target.vout_method = 0;
     }
+#endif
+
   }
 #if 0
   if (plat_target.vout_method == vout_mode_overlay) {
@@ -189,11 +191,14 @@ int plat_sdl_change_video_mode(int w, int h, int force)
 
 #if 0
     plat_sdl_screen = SDL_SetVideoMode(w, h, 16, SDL_HWSURFACE | SDL_DOUBLEBUF);
-#endif
+
     if (plat_sdl_screen == NULL) {
       fprintf(stderr, "SDL_SetVideoMode failed: %s\n", SDL_GetError());
       return -1;
     }
+	
+#endif
+
   }
 
   old_fullscreen = plat_target.vout_fullscreen;
