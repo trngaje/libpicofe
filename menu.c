@@ -54,11 +54,13 @@ static int g_menu_filter_off;
 static int g_border_style;
 static int border_left, border_right, border_top, border_bottom;
 
+#if 0
 void menuscreen_memset_lines(unsigned short *dst, int c, int l)
 {
 	for (; l > 0; l--, dst += g_menuscreen_pp)
 		memset(dst, c, g_menuscreen_w * 2);
 }
+#endif
 
 // draws text to current bbp16 screen
 static void text_out16_(int x, int y, const char *text, int color)
@@ -302,24 +304,25 @@ void menu_init_base(void)
 
 	// load custom font and selector (stored as 1st symbol in font table)
 	pos = plat_get_skin_dir(buff, sizeof(buff));
-
+#if 0
 	if (MENU_X2) {
 		strcpy(buff + pos, "font_256x320.png");
 		
 		//readpng(menu_font_data, buff, READPNG_FONT, 256, 320);		
 	}
 	else {
+#endif
 		strcpy(buff + pos, "font.png");
 		
 		readpng(menu_font_data, buff, READPNG_FONT,
 			MENU_X2 ? 256 : 128, MENU_X2 ? 320 : 160);
 
-	}
+//	}
 	// default selector symbol is '>'
 	memcpy(menu_font_data, menu_font_data + ((int)'>') * me_mfont_w * me_mfont_h / 2,
 		me_mfont_w * me_mfont_h / 2);
 	strcpy(buff + pos, "selector.png");
-	//readpng(menu_font_data, buff, READPNG_SELECTOR, me_mfont_w, me_mfont_h);
+	readpng(menu_font_data, buff, READPNG_SELECTOR, me_mfont_w, me_mfont_h);
 
 	// load custom colors
 	strcpy(buff + pos, "skin.txt");
@@ -954,7 +957,7 @@ static int scandir_filter(const struct dirent *ent)
 	const char *ext;
 	int i;
 
-	if (ent == NULL)
+	if (ent == NULL || ent->d_name == NULL)
 		return 0;
 
 	switch (ent->d_type) {

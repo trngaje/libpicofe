@@ -18,21 +18,43 @@
 #include "gl.h"
 #include "plat_sdl.h"
 
+#if 1
+#include <go2/display.h>
+#include <drm/drm_fourcc.h>
+#endif
 // XXX: maybe determine this instead..
 #define WM_DECORATION_H 32
 
+#if 1
+SDL_Window *plat_sdl_screen;
+#else
 SDL_Surface *plat_sdl_screen;
 SDL_Overlay *plat_sdl_overlay;
+#endif
+
 int plat_sdl_gl_active;
 void (*plat_sdl_resize_cb)(int w, int h);
 void (*plat_sdl_quit_cb)(void);
 
 static char vid_drv_name[32];
+#if 1
+int window_w, window_h;
+#else
 static int window_w, window_h;
+#endif
 static int fs_w, fs_h;
 static int old_fullscreen;
 static int vout_mode_overlay = -1, vout_mode_gl = -1;
+
+#if 1
+go2_display_t* display = NULL;
+go2_presenter_t* presenter = NULL;
+go2_context_t* context = NULL;
+go2_surface_t* surface = NULL;
+int go2_w,go2_h;
+#else
 static void *display, *window;
+#endif
 static int gl_quirks;
 
 /* w, h is layer resolution */
@@ -49,6 +71,13 @@ int plat_sdl_change_video_mode(int w, int h, int force)
   else
     prev_h = h;
 
+#if 1
+	window_w = w;
+	window_h = h;
+	
+	g_menuscreen_w = window_w;
+	g_menuscreen_h = window_h;
+#endif
   // invalid method might come from config..
   if (plat_target.vout_method != 0
       && plat_target.vout_method != vout_mode_overlay
@@ -57,7 +86,7 @@ int plat_sdl_change_video_mode(int w, int h, int force)
     fprintf(stderr, "invalid vout_method: %d\n", plat_target.vout_method);
     plat_target.vout_method = 0;
   }
-
+#if 0
   // skip GL recreation if window doesn't change - avoids flicker
   if (plat_target.vout_method == vout_mode_gl && plat_sdl_gl_active
       && plat_target.vout_fullscreen == old_fullscreen && !force)
@@ -73,7 +102,19 @@ int plat_sdl_change_video_mode(int w, int h, int force)
     gl_finish();
     plat_sdl_gl_active = 0;
   }
+#endif
 
+#if 1
+ if (1) {
+    Uint32 flags = SDL_SWSURFACE;
+    int win_w = window_w;
+    int win_h = window_h;
+
+    if (plat_target.vout_fullscreen) {
+      win_w = fs_w;
+      win_h = fs_h;
+    }
+#else
   if (plat_target.vout_method != 0) {
     Uint32 flags = SDL_RESIZABLE | SDL_SWSURFACE;
     int win_w = window_w;
@@ -84,18 +125,39 @@ int plat_sdl_change_video_mode(int w, int h, int force)
       win_w = fs_w;
       win_h = fs_h;
     }
-
+#endif
     // XXX: workaround some occasional mysterious deadlock in SDL_SetVideoMode
     // (seen on r-pi)
     SDL_PumpEvents();
 
+#if 1
+	// 윈도우가 생성되어야 키보드 입력을 받을 수 있다. @2021.3.14 일 확인됨
+	// 이슈 : 커서 표시됨 .. 제거 필요함
+	// for SDL2.0
+	plat_sdl_screen = SDL_CreateWindow("pcsx Window",
+							  SDL_WINDOWPOS_UNDEFINED,
+							  SDL_WINDOWPOS_UNDEFINED,
+							  win_w, win_h,
+							  SDL_WINDOW_FULLSCREEN | SDL_WINDOW_OPENGL);
+							  
+	SDL_ShowCursor(SDL_DISABLE);
+	
+	if (surface!=NULL)
+		go2_surface_destroy(surface);
+	
+	surface = go2_surface_create(display, w, h, DRM_FORMAT_RGB565);
+
+	g_menuscreen_w = go2_surface_stride_get(surface)/2; // 201025 by trngaje
+								  
+#else
     plat_sdl_screen = SDL_SetVideoMode(win_w, win_h, 0, flags);
+#endif
     if (plat_sdl_screen == NULL) {
       fprintf(stderr, "SDL_SetVideoMode failed: %s\n", SDL_GetError());
       plat_target.vout_method = 0;
     }
   }
-
+#if 0
   if (plat_target.vout_method == vout_mode_overlay) {
     plat_sdl_overlay = SDL_CreateYUVOverlay(w, h, SDL_UYVY_OVERLAY, plat_sdl_screen);
     if (plat_sdl_overlay != NULL) {
@@ -116,11 +178,13 @@ int plat_sdl_change_video_mode(int w, int h, int force)
       plat_target.vout_method = 0;
     }
   }
-
+#endif
   if (plat_target.vout_method == 0) {
     SDL_PumpEvents();
 
+#if 0
     plat_sdl_screen = SDL_SetVideoMode(w, h, 16, SDL_HWSURFACE | SDL_DOUBLEBUF);
+#endif
     if (plat_sdl_screen == NULL) {
       fprintf(stderr, "SDL_SetVideoMode failed: %s\n", SDL_GetError());
       return -1;
@@ -129,7 +193,11 @@ int plat_sdl_change_video_mode(int w, int h, int force)
 
   old_fullscreen = plat_target.vout_fullscreen;
   if (plat_sdl_resize_cb != NULL)
+#if 1
+    plat_sdl_resize_cb(w, h); 
+#else
     plat_sdl_resize_cb(plat_sdl_screen->w, plat_sdl_screen->h);
+#endif
 
   return 0;
 }
@@ -140,6 +208,22 @@ void plat_sdl_event_handler(void *event_)
   SDL_Event *event = event_;
 
   switch (event->type) {
+#if 1
+  //case SDL_VIDEORESIZE: // for SDL1.2
+  case SDL_WINDOWEVENT: // for SDL2.0
+	switch (event->window.event) {
+		case SDL_WINDOWEVENT_RESIZED:
+		
+		//printf("resize %dx%d\n", event->window.data1, event->window.data2);		
+		break;
+		
+	//  case SDL_ACTIVEEVENT:
+		case SDL_WINDOWEVENT_SHOWN:
+		// 여기 호출됨
+		//printf("Window %d shown: %dx%d\n", event->window.windowID, window_w, window_h);			
+	    break;
+	}
+#else
   case SDL_VIDEORESIZE:
     //printf("resize %dx%d\n", event->resize.w, event->resize.h);
     if (plat_target.vout_method != 0
@@ -167,6 +251,7 @@ void plat_sdl_event_handler(void *event_)
     }
     was_active = event->active.gain;
     break;
+#endif
   case SDL_QUIT:
     if (plat_sdl_quit_cb != NULL)
       plat_sdl_quit_cb();
@@ -176,6 +261,67 @@ void plat_sdl_event_handler(void *event_)
 
 int plat_sdl_init(void)
 {
+#if 1
+	static const char *vout_list[] = { NULL, NULL, NULL, NULL };
+//	printf("[trngaje] plat_sdl_init\r\n");
+	
+	// added by trngaje
+	display = go2_display_create();
+	go2_w = go2_display_height_get(display);
+	go2_h = go2_display_width_get(display);	
+    presenter = go2_presenter_create(display, DRM_FORMAT_RGB565, 0xff080808);
+
+    go2_context_attributes_t attr;
+    attr.major = 2;
+    attr.minor = 0;
+    attr.red_bits = 8;
+    attr.green_bits = 8;
+    attr.blue_bits = 8;
+    attr.alpha_bits = 8;
+    attr.depth_bits = 24;
+    attr.stencil_bits = 8;
+
+	//g_menuscreen_w = 320;
+	//g_menuscreen_h = 240;
+	g_menuscreen_w = 640;
+	g_menuscreen_h = 480;	
+	//g_menuscreen_w = 368;
+	//g_menuscreen_h = 480;
+		
+	if (surface!=NULL)
+		go2_surface_destroy(surface);
+	surface = go2_surface_create(display, g_menuscreen_w, g_menuscreen_h, DRM_FORMAT_RGB565);
+
+//printf("[trngaje] plat_sdl_init: context = 0x%x, display = 0x%x, surface = 0x%x\r\n", 
+//		context, display, surface);
+
+	int *dst = (int *)go2_surface_map(surface);
+	printf("[trngaje] plat_sdl_init: dst = 0x%x\r\n", dst);
+	
+
+	
+	//int i = 0;
+	//vout_list[i++] = "SDL Window";
+
+	//plat_target.vout_method = vout_mode_overlay = i;
+	//vout_list[i++] = "Video Overlay";
+
+	//plat_target.vout_method = vout_mode_gl = i;
+	//vout_list[i++] = "OpenGL";
+
+	//plat_target.vout_methods = vout_list;	
+	
+	
+	int ret = SDL_Init(SDL_INIT_NOPARACHUTE/* | SDL_INIT_JOYSTICK */);
+	if (ret != 0) {
+		printf("[trngaje: SDL_Init failed: %s\n", SDL_GetError());
+	}
+
+	SDL_ShowCursor(SDL_DISABLE); // by trngaje
+
+
+	return 0;
+#else
   static const char *vout_list[] = { NULL, NULL, NULL, NULL };
   const SDL_VideoInfo *info;
   SDL_SysWMinfo wminfo;
@@ -294,10 +440,30 @@ int plat_sdl_init(void)
 fail:
   SDL_Quit();
   return -1;
+#endif
 }
 
 void plat_sdl_finish(void)
 {
+#if 1
+	if (context != NULL)
+	{
+		go2_context_destroy(context);
+		context = NULL;
+	}
+	
+	if (presenter != NULL)
+	{
+		go2_presenter_destroy(presenter);
+		presenter = NULL;
+	}
+	
+	if (display != NULL)
+	{
+		go2_display_destroy(display);
+		display = NULL;	
+	}
+#else
   if (plat_sdl_overlay != NULL) {
     SDL_FreeYUVOverlay(plat_sdl_overlay);
     plat_sdl_overlay = NULL;
@@ -311,12 +477,18 @@ void plat_sdl_finish(void)
   if (strcmp(vid_drv_name, "x11") != 0)
     SDL_SetVideoMode(fs_w, fs_h, 16, SDL_SWSURFACE);
   SDL_Quit();
+#endif
 }
 
 void plat_sdl_overlay_clear(void)
 {
+#if 1
+  int pixels = window_w*window_h;
+  int *dst = (int *)go2_surface_map(surface);
+#else	
   int pixels = plat_sdl_overlay->w * plat_sdl_overlay->h;
   int *dst = (int *)plat_sdl_overlay->pixels[0];
+#endif
   int v = 0x10801080;
 
   for (; pixels > 0; dst += 4, pixels -= 2 * 4)

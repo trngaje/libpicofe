@@ -132,8 +132,11 @@ int readpng(void *dest, const char *fname, readpng_what what, int req_w, int req
 						unsigned char *src = row_ptr[y*sym_h + y1] + x*sym_w;
 						for (x1 = sym_w/2; x1 > 0; x1--, src+=2)
 						{
-							//*dst++ = ((src[0]^0xff) & 0xf0) | ((src[1]^0xff) >> 4);
+#if 1
+							*dst++ = ((src[0]^0xff) & 0xf0) | ((src[1]^0xff) >> 4);
+#else
 							*dst++ = ((src[0]^0xff) << 4) | ((src[1]^0xff) & 0x0f); // for 320x240
+#endif
 						}
 					}
 				}
