@@ -140,7 +140,7 @@ static int
 dis_asm_read_memory(bfd_vma memaddr, bfd_byte *myaddr, unsigned int len,
                      struct disassemble_info *info)
 {
-  memcpy(myaddr, (void *)(long)memaddr, len);
+  memcpy(myaddr, (void *)(int)memaddr, len);
   return 0;
 }
 
@@ -148,7 +148,7 @@ static void
 dis_asm_memory_error(int status, bfd_vma memaddr,
                       struct disassemble_info *info)
 {
-  fprintf(stderr, "memory_error %p\n", (void *)(long)memaddr);
+  fprintf(stderr, "memory_error %p\n", (void *)(int)memaddr);
 }
 
 static void

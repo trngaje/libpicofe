@@ -133,13 +133,18 @@ int plat_sdl_change_video_mode(int w, int h, int force)
 #if 1
 	// 윈도우가 생성되어야 키보드 입력을 받을 수 있다. @2021.3.14 일 확인됨
 	// 이슈 : 커서 표시됨 .. 제거 필요함
+	// SDL_CreateWindow 는 libgo 에서 생성한 surface와 같이 사용이 안되어
+	// keyboard event를 받기 위해서  SDL_Init(SDL_INIT_VIDEO); 을 사용한다.
 	// for SDL2.0
-	plat_sdl_screen = SDL_CreateWindow("pcsx Window",
+	
+	SDL_Init(SDL_INIT_VIDEO);
+/*
+	SDL_Window* sdl_window = SDL_CreateWindow("pcsx Window",
 							  SDL_WINDOWPOS_UNDEFINED,
 							  SDL_WINDOWPOS_UNDEFINED,
 							  win_w, win_h,
 							  SDL_WINDOW_FULLSCREEN | SDL_WINDOW_OPENGL);
-							  
+*/							  
 	SDL_ShowCursor(SDL_DISABLE);
 	
 	if (surface!=NULL)
